@@ -1,0 +1,11 @@
+CMAKE_DEBUG_BUILD
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+*.elf
+objcat
+objinfo
+objpatch
+saruman
+saruman.cpp
