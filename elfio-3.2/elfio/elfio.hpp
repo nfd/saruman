@@ -431,6 +431,9 @@ class elfio
     }
 
 	void delete_all_sections() {
+		for(auto section: sections_) {
+			delete section;
+		}
 		sections_.clear();
 	}
 
