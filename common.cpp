@@ -25,7 +25,7 @@ void copyElfData(ELFIO::elfio &dest, ELFIO::elfio &src)
 	}
 }
 
-ELFIO::elfio newFromTemplate(ELFIO::elfio &templ)
+ELFIO::elfio newFromTemplate(ELFIO::elfio &templ, ELFIO::Elf64_Addr orEntry)
 {
 	ELFIO::elfio elf;
 
@@ -36,7 +36,7 @@ ELFIO::elfio newFromTemplate(ELFIO::elfio &templ)
 	elf.set_machine(templ.get_machine());
 	elf.set_flags(templ.get_flags());
 
-	elf.set_entry(templ.get_entry());
+	elf.set_entry(templ.get_entry() | orEntry);
 
 	return elf;
 }

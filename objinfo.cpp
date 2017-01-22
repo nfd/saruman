@@ -31,6 +31,7 @@ struct Args {
 	bool mips0to1;
 	bool mips1to0;
 	bool printHighestVaddr;
+	bool printLowestVaddr;
 	bool printEntry;
 	std::string printSymbolValue;
 	std::string input;
@@ -40,8 +41,9 @@ struct Args {
 
 		TCLAP::CmdLine cmdLine("object info printer", ' ', VERSION);
 		TCLAP::ValueArg<int> roundToPageArg("r", "round-to-page", "Round output up", false, 0, "bytes", cmdLine);
-		TCLAP::SwitchArg printHighestVaddrArg("V", "highest-vaddr", "Display highest vaddr", cmdLine);
+		TCLAP::SwitchArg printHighestVaddrArg(">", "highest-vaddr", "Display highest vaddr", cmdLine);
 		TCLAP::SwitchArg printEntryArg("E", "entrypoint", "Display entrypoint", cmdLine);
+		TCLAP::SwitchArg printLowestVaddrArg("<", "lowest-vaddr", "Display lowest vaddr", cmdLine);
 		TCLAP::ValueArg<std::string> printSymbolValueArg("S", "symbol-value", "Display symbol value", false, "", "sym", cmdLine);
 		TCLAP::SwitchArg mipsUserToKernelArg("1", "to-kseg0", "Convert MIPS VMAs to kseg1", cmdLine);
 		TCLAP::SwitchArg mipsKernelToUserArg("0", "to-kuseg", "Convert MIPS VMAs to kuseg", cmdLine);
@@ -50,6 +52,7 @@ struct Args {
 		cmdLine.parse(argc, argv);
 
 		args.printHighestVaddr = printHighestVaddrArg.getValue();
+		args.printLowestVaddr = printLowestVaddrArg.getValue();
 		args.printEntry = printEntryArg.getValue();
 		args.printSymbolValue = printSymbolValueArg.getValue();
 		args.roundToPage = roundToPageArg.getValue();
@@ -73,16 +76,30 @@ static ELFIO::Elf64_Addr mips1To0(ELFIO::Elf64_Addr addr)
 
 ELFIO::Elf64_Addr findHighestVaddr(ELFIO::elfio &elf)
 {
-	ELFIO::Elf64_Addr highest = 0;
+	ELFIO::Elf64_Addr vaddr = 0;
 
 	for(auto phdr : elf.segments) {
 		if(phdr->get_type() == PT_LOAD) {
 			ELFIO::Elf64_Addr current = phdr->get_virtual_address() + phdr->get_memory_size();
-			highest = std::max(highest, current);
+			vaddr = std::max(vaddr, current);
 		}
 	}
 
-	return highest;
+	return vaddr;
+}
+
+ELFIO::Elf64_Addr findLowestVaddr(ELFIO::elfio &elf)
+{
+	ELFIO::Elf64_Addr vaddr = 0xffffffffffffffffL;
+
+	for(auto phdr : elf.segments) {
+		if(phdr->get_type() == PT_LOAD) {
+			ELFIO::Elf64_Addr current = phdr->get_virtual_address();
+			vaddr = std::min(vaddr, current);
+		}
+	}
+
+	return vaddr;
 }
 
 #define PAGE_SIZE 4096
@@ -150,6 +167,10 @@ int main(int argc, char **argv)
 
 		if(args.printHighestVaddr) {
 			ELFIO::Elf64_Addr vaddr = convertVma(findHighestVaddr(input), args);
+			std::cout << "0x" << std::hex << vaddr << std::dec << '\n';
+		}
+		if(args.printLowestVaddr) {
+			ELFIO::Elf64_Addr vaddr = convertVma(findLowestVaddr(input), args);
 			std::cout << "0x" << std::hex << vaddr << std::dec << '\n';
 		}
 		if(args.printSymbolValue != "") {

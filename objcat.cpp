@@ -10,24 +10,28 @@
 
 #define VERSION "0.1"
 
-static const ELFIO::Elf64_Addr MipsKernelSpace = 0x80000000;
+static const ELFIO::Elf64_Addr MipsK0 = 0x80000000;
+static const ELFIO::Elf64_Addr MipsK1 = 0xa0000000;
 
 struct Args {
 	std::string command;
 	std::vector<std::string> inputs;
-	bool mips0to1;
+	bool mipsToK0;
+	bool mipsToK1;
 
 	static Args parse(int argc, char **argv){
 		Args args;
 
 		TCLAP::CmdLine cmdLine("elf concatenator", ' ', VERSION);
-		TCLAP::SwitchArg mipsUserToKernelArg("1", "to-kseg0", "Convert MIPS VMAs to kseg1", cmdLine);
+		TCLAP::SwitchArg mipsToK0Arg("0", "to-kseg0", "Convert VMAs to kseg0 (MIPS)", cmdLine);
+		TCLAP::SwitchArg mipsToK1Arg("1", "to-kseg1", "Convert VMAs to kseg1 (MIPS)", cmdLine);
 		TCLAP::UnlabeledMultiArg<std::string> inputArg("inputs", "Input file names", false, "filenames", cmdLine);
 
 		cmdLine.parse(argc, argv);
 
 		args.inputs = inputArg.getValue();
-		args.mips0to1 = mipsUserToKernelArg.getValue();
+		args.mipsToK0 = mipsToK0Arg.getValue();
+		args.mipsToK1 = mipsToK1Arg.getValue();
 
 		return args;
 	}
@@ -58,14 +62,9 @@ ELFIO::Elf_Xword inventSectionFlags(ELFIO::Elf_Word segmentFlags)
 	return flags;
 }
 
-static ELFIO::Elf64_Addr mips0To1(ELFIO::Elf64_Addr addr)
+ELFIO::elfio mergeSegments(std::vector<ELFIO::elfio> &inputElves, ELFIO::Elf64_Addr orVma)
 {
-	return addr | MipsKernelSpace;
-}
-
-ELFIO::elfio mergeSegments(std::vector<ELFIO::elfio> &inputElves, bool convertMipsVmas)
-{
-	auto elfOutput = newFromTemplate(inputElves[0]);
+	auto elfOutput = newFromTemplate(inputElves[0], orVma);
 
 	for(auto &elf : inputElves) {
 
@@ -78,9 +77,7 @@ ELFIO::elfio mergeSegments(std::vector<ELFIO::elfio> &inputElves, bool convertMi
 				auto sectionName = inventSectionName(elf.get_name(), segment->get_index(), segmentFlags, segmentFileSize);
 
 				auto vaddr = segment->get_virtual_address();
-				if(convertMipsVmas) {
-					vaddr = mips0To1(vaddr);
-				}
+				vaddr |= orVma;
 
 				// std::cout << "memory size " << segment->get_memory_size() << "\n";
 				auto newSection = elfOutput.sections.add(sectionName);
@@ -111,9 +108,10 @@ int main(int argc, char **argv)
 {
 	try {
 		Args args = Args::parse(argc, argv);
+		ELFIO::Elf64_Addr orVma = args.mipsToK0 ? MipsK0 : (args.mipsToK1 ? MipsK1 : 0);
 
 		auto inputs = loadElves(args.inputs);
-		auto output = mergeSegments(inputs, args.mips0to1);
+		auto output = mergeSegments(inputs, orVma);
 		output.save("-");
 	} catch (TCLAP::ArgException &e) {
 		std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
